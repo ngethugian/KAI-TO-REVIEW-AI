@@ -1,4 +1,5 @@
 import { VideoManager } from './modules/video.js';
+import { SubtitleManager } from './modules/subtitle.js';
 
 const STORAGE_KEYS = {
   HISTORY: 'kaito_review_ai_history_v1',
@@ -7,7 +8,7 @@ const STORAGE_KEYS = {
 
 const TAB_META = {
   home: ['Trang chủ', 'Tải video tiếng Trung đầu vào và theo dõi quy trình Việt hóa tự động'],
-  subtitle: ['Trích xuất phụ đề', 'Nhận diện giọng nói tiếng Trung và tạo SRT chuẩn thời gian (Giai đoạn 3)'],
+  subtitle: ['Trích xuất phụ đề', 'Nhận diện giọng nói tiếng Trung bằng Whisper AI và tạo file SRT chuẩn thời gian'],
   translate: ['Dịch phụ đề', 'Dịch Trung → Việt đầy đủ nội dung và chỉnh sửa trực tiếp (Giai đoạn 4)'],
   voice: ['Tạo giọng đọc', 'Chuyển phụ đề thành giọng đọc tiếng Việt và đồng bộ thời gian (Giai đoạn 5)'],
   mask: ['Che chữ video', 'Nhận diện chữ Trung Quốc và tạo vùng làm mờ/che tùy chỉnh (Giai đoạn 6)'],
@@ -17,10 +18,10 @@ const TAB_META = {
   settings: ['Cài đặt', 'Tùy chỉnh chất lượng xuất, mô hình AI và nguồn dịch miễn phí']
 };
 
-// Trạng thái dùng chung cho toàn bộ các module giai đoạn sau
 export const AppState = {
   videoFile: null,
   videoMeta: null,
+  subtitles: [],
   settings: loadSettings()
 };
 
@@ -116,6 +117,8 @@ async function detectHardwareSupport() {
   label.textContent = 'Chế độ CPU (WebAssembly)';
 }
 
+let switchTabFn = () => {};
+
 function initNavigation() {
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('sidebarOverlay');
@@ -127,6 +130,18 @@ function initNavigation() {
     overlay.classList.remove('show');
   };
 
+  switchTabFn = (tab) => {
+    navItems.forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+    document.querySelectorAll('.tab-panel').forEach((p) => {
+      p.classList.toggle('active', p.id === `tab-${tab}`);
+    });
+
+    const [title, subtitle] = TAB_META[tab] || ['KAI TỒ REVIEW AI', ''];
+    document.getElementById('pageTitle').textContent = title;
+    document.getElementById('pageSubtitle').textContent = subtitle;
+    closeMobileMenu();
+  };
+
   menuToggle.addEventListener('click', () => {
     sidebar.classList.toggle('open');
     overlay.classList.toggle('show');
@@ -135,22 +150,11 @@ function initNavigation() {
   overlay.addEventListener('click', closeMobileMenu);
 
   navItems.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const tab = btn.dataset.tab;
-      navItems.forEach((b) => b.classList.toggle('active', b === btn));
-      document.querySelectorAll('.tab-panel').forEach((p) => {
-        p.classList.toggle('active', p.id === `tab-${tab}`);
-      });
-
-      const [title, subtitle] = TAB_META[tab] || ['KAI TỒ REVIEW AI', ''];
-      document.getElementById('pageTitle').textContent = title;
-      document.getElementById('pageSubtitle').textContent = subtitle;
-      closeMobileMenu();
-    });
+    btn.addEventListener('click', () => switchTabFn(btn.dataset.tab));
   });
 }
 
-function initSettingsForm() {
+function initSettingsForm(onSettingsSaved) {
   const s = AppState.settings;
   document.getElementById('settingQuality').value = s.quality;
   document.getElementById('settingBitrate').value = s.bitrate;
@@ -167,10 +171,35 @@ function initSettingsForm() {
       translateProvider: document.getElementById('settingTranslateProvider').value,
       translateEndpoint: document.getElementById('settingTranslateEndpoint').value.trim()
     });
+    if (typeof onSettingsSaved === 'function') onSettingsSaved();
     const msg = document.getElementById('settingsSaveMsg');
     msg.textContent = 'Đã lưu cài đặt vào trình duyệt.';
     setTimeout(() => { msg.textContent = ''; }, 3000);
   });
+}
+
+function updatePipelineProgress() {
+  const progressBar = document.getElementById('pipelineProgressBar');
+  const progressPercent = document.getElementById('pipelinePercent');
+  const statusText = document.getElementById('pipelineStatusText');
+
+  const hasVideo = Boolean(AppState.videoFile);
+  const hasSubs = AppState.subtitles.length > 0;
+
+  let pct = 0;
+  let text = 'Chờ tải video đầu vào...';
+
+  if (hasVideo && !hasSubs) {
+    pct = 9;
+    text = 'Bước 1 hoàn tất — Chuyển sang mục "02 Trích xuất phụ đề" để chạy Whisper AI';
+  } else if (hasSubs) {
+    pct = 27;
+    text = `Hoàn tất Bước 1–3 (${AppState.subtitles.length} dòng SRT) — Sẵn sàng cho Dịch thuật (GĐ 4)`;
+  }
+
+  progressBar.style.width = `${pct}%`;
+  progressPercent.textContent = `${pct}%`;
+  statusText.textContent = text;
 }
 
 function updateStep1UI(loaded, meta = null) {
@@ -178,9 +207,6 @@ function updateStep1UI(loaded, meta = null) {
   const step1 = document.querySelector('[data-step="1"]');
   const step1Desc = document.getElementById('step1Desc');
   const step1State = document.getElementById('step1State');
-  const progressBar = document.getElementById('pipelineProgressBar');
-  const progressPercent = document.getElementById('pipelinePercent');
-  const statusText = document.getElementById('pipelineStatusText');
 
   if (loaded && meta) {
     badge.textContent = `Đã nạp: ${meta.resolution} (${meta.durationFormatted})`;
@@ -188,24 +214,46 @@ function updateStep1UI(loaded, meta = null) {
     step1.classList.add('done');
     step1Desc.textContent = `${meta.name} • ${meta.sizeFormatted}`;
     step1State.textContent = 'Xong';
-    progressBar.style.width = '9%';
-    progressPercent.textContent = '9%';
-    statusText.textContent = 'Bước 1 hoàn tất — Video sẵn sàng cho nhận diện phụ đề (GĐ 3)';
   } else {
     badge.textContent = 'Chưa có video';
     badge.classList.remove('ready');
     step1.classList.remove('done');
     step1Desc.textContent = 'Chưa có tệp video';
     step1State.textContent = 'Chờ';
-    progressBar.style.width = '0%';
-    progressPercent.textContent = '0%';
-    statusText.textContent = 'Chờ tải video đầu vào...';
   }
+  updatePipelineProgress();
+}
+
+function updateSteps23UI(subtitles) {
+  const step2 = document.querySelector('[data-step="2"]');
+  const step3 = document.querySelector('[data-step="3"]');
+  const step2Desc = document.getElementById('step2Desc');
+  const step2State = document.getElementById('step2State');
+  const step3Desc = document.getElementById('step3Desc');
+  const step3State = document.getElementById('step3State');
+
+  if (subtitles.length > 0) {
+    step2.classList.add('done');
+    step2Desc.textContent = 'Đã nhận diện giọng nói tiếng Trung';
+    step2State.textContent = 'Xong';
+
+    step3.classList.add('done');
+    step3Desc.textContent = `Đã tạo ${subtitles.length} dòng phụ đề SRT`;
+    step3State.textContent = 'Xong';
+  } else {
+    step2.classList.remove('done');
+    step2Desc.textContent = 'Chuyển sang mục 02 để chạy Whisper AI';
+    step2State.textContent = 'Sẵn sàng';
+
+    step3.classList.remove('done');
+    step3Desc.textContent = 'Chưa có dòng phụ đề';
+    step3State.textContent = 'Chờ';
+  }
+  updatePipelineProgress();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
   initNavigation();
-  initSettingsForm();
   renderHistory();
   detectHardwareSupport();
 
@@ -213,6 +261,39 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.removeItem(STORAGE_KEYS.HISTORY);
     renderHistory();
   });
+
+  document.getElementById('goSubtitleBtn').addEventListener('click', () => {
+    switchTabFn('subtitle');
+  });
+
+  const subtitleManager = new SubtitleManager(
+    {
+      sourceStatus: document.getElementById('subSourceStatus'),
+      modelSelect: document.getElementById('subModelSelect'),
+      deviceSelect: document.getElementById('subDeviceSelect'),
+      startBtn: document.getElementById('subStartBtn'),
+      stopBtn: document.getElementById('subStopBtn'),
+      importAudioBtn: document.getElementById('subImportAudioBtn'),
+      audioInput: document.getElementById('subAudioInput'),
+      importSrtBtn: document.getElementById('subImportSrtBtn'),
+      srtInput: document.getElementById('subSrtInput'),
+      errorBox: document.getElementById('subErrorBox'),
+      progressBox: document.getElementById('subProgressBox'),
+      progressText: document.getElementById('subProgressText'),
+      progressPercent: document.getElementById('subProgressPercent'),
+      progressBar: document.getElementById('subProgressBar'),
+      countBadge: document.getElementById('subCountBadge'),
+      addLineBtn: document.getElementById('subAddLineBtn'),
+      downloadSrtBtn: document.getElementById('subDownloadSrtBtn'),
+      listContainer: document.getElementById('subListContainer')
+    },
+    AppState,
+    {
+      onSubtitlesUpdated: (subs) => updateSteps23UI(subs)
+    }
+  );
+
+  initSettingsForm(() => subtitleManager.syncModelFromSettings());
 
   new VideoManager(
     {
@@ -241,12 +322,14 @@ document.addEventListener('DOMContentLoaded', () => {
         AppState.videoFile = file;
         AppState.videoMeta = meta;
         updateStep1UI(true, meta);
+        subtitleManager.setVideo(file, meta);
         pushHistory(meta);
       },
       onVideoCleared: () => {
         AppState.videoFile = null;
         AppState.videoMeta = null;
         updateStep1UI(false);
+        subtitleManager.setVideo(null, null);
       }
     }
   );
