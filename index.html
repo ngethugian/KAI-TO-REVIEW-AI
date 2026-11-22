@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KAI TỒ REVIEW AI – Video Translator Studio</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Overlay cho mobile -->
+    <div id="sidebarOverlay" class="sidebar-overlay"></div>
+
+    <!-- Thanh điều hướng bên trái -->
+    <aside id="sidebar" class="sidebar">
+      <div class="brand">
+        <div class="brand-logo" aria-hidden="true">KT</div>
+        <div class="brand-text">
+          <h1>KAI TỒ REVIEW AI</h1>
+          <span>Video Translator Studio</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu" aria-label="Điều hướng chính">
+        <button class="nav-item active" data-tab="home">
+          <span class="nav-index">01</span>
+          <span class="nav-label">Trang chủ</span>
+        </button>
+        <button class="nav-item" data-tab="subtitle">
+          <span class="nav-index">02</span>
+          <span class="nav-label">Trích xuất phụ đề</span>
+          <span class="badge badge-next">GĐ 3</span>
+        </button>
+        <button class="nav-item" data-tab="translate">
+          <span class="nav-index">03</span>
+          <span class="nav-label">Dịch phụ đề</span>
+          <span class="badge badge-next">GĐ 4</span>
+        </button>
+        <button class="nav-item" data-tab="voice">
+          <span class="nav-index">04</span>
+          <span class="nav-label">Tạo giọng đọc</span>
+          <span class="badge badge-next">GĐ 5</span>
+        </button>
+        <button class="nav-item" data-tab="mask">
+          <span class="nav-index">05</span>
+          <span class="nav-label">Che chữ video</span>
+          <span class="badge badge-next">GĐ 6</span>
+        </button>
+        <button class="nav-item" data-tab="logo">
+          <span class="nav-index">06</span>
+          <span class="nav-label">Thêm logo</span>
+          <span class="badge badge-next">GĐ 6</span>
+        </button>
+        <button class="nav-item" data-tab="export">
+          <span class="nav-index">07</span>
+          <span class="nav-label">Xuất video</span>
+          <span class="badge badge-next">GĐ 7</span>
+        </button>
+        <div class="nav-divider"></div>
+        <button class="nav-item" data-tab="history">
+          <span class="nav-index">08</span>
+          <span class="nav-label">Lịch sử dự án</span>
+        </button>
+        <button class="nav-item" data-tab="settings">
+          <span class="nav-index">09</span>
+          <span class="nav-label">Cài đặt</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="env-pill">
+          <span class="dot-online"></span>
+          <span id="gpuStatusText">Đang kiểm tra WebGPU...</span>
+        </div>
+        <p class="privacy-note">Xử lý cục bộ trên trình duyệt. Không tự ý tải video lên server ngoài.</p>
+      </div>
+    </aside>
+
+    <!-- Khu vực nội dung chính -->
+    <div class="main-wrapper">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button id="menuToggle" class="icon-btn mobile-only" aria-label="Mở menu">☰</button>
+          <div>
+            <h2 id="pageTitle">Trang chủ</h2>
+            <p id="pageSubtitle">Tải video tiếng Trung đầu vào và theo dõi quy trình Việt hóa tự động</p>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <span id="activeVideoBadge" class="status-chip">Chưa có video</span>
+        </div>
+      </header>
+
+      <main class="content">
+        <!-- TAB 1: TRANG CHỦ -->
+        <section id="tab-home" class="tab-panel active">
+          <div class="grid-home">
+            <!-- Cột trái: Tải & xem trước video -->
+            <div class="card">
+              <div class="card-header">
+                <h3>1. Video đầu vào</h3>
+                <button id="selectVideoBtn" class="btn btn-primary">Chọn video</button>
+              </div>
+
+              <input
+                type="file"
+                id="videoInput"
+                accept="video/mp4,video/quicktime,video/x-matroska,video/webm,.mp4,.mov,.mkv,.webm"
+                hidden
+              />
+
+              <!-- Khu vực kéo thả -->
+              <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="Kéo thả hoặc bấm để chọn video">
+                <div class="drop-icon">🎬</div>
+                <h4>Kéo & thả video tiếng Trung vào đây</h4>
+                <p>Hỗ trợ MP4, MOV, MKV, WebM (tùy codec trình duyệt hỗ trợ)</p>
+                <span class="drop-hint">Giữ nguyên độ phân giải gốc • Không tải file lên máy chủ</span>
+              </div>
+
+              <!-- Thông báo lỗi / cảnh báo RAM -->
+              <div id="videoErrorBox" class="alert alert-error hidden"></div>
+              <div id="memoryWarningBox" class="alert alert-warning hidden"></div>
+
+              <!-- Khu vực hiển thị sau khi nạp video -->
+              <div id="videoWorkspace" class="video-workspace hidden">
+                <div class="video-frame-box">
+                  <video id="mainVideoPlayer" controls playsinline preload="metadata"></video>
+                </div>
+
+                <div class="video-meta-grid">
+                  <div class="meta-item">
+                    <span class="meta-label">Tên tệp</span>
+                    <strong id="videoFileName" class="meta-value truncate">—</strong>
+                  </div>
+                  <div class="meta-item">
+                    <span class="meta-label">Độ phân giải gốc</span>
+                    <strong id="videoResolution" class="meta-value">—</strong>
+                  </div>
+                  <div class="meta-item">
+                    <span class="meta-label">Thời lượng</span>
+                    <strong id="videoDuration" class="meta-value">—</strong>
+                  </div>
+                  <div class="meta-item">
+                    <span class="meta-label">Dung lượng</span>
+                    <strong id="videoSize" class="meta-value">—</strong>
+                  </div>
+                  <div class="meta-item">
+                    <span class="meta-label">Định dạng</span>
+                    <strong id="videoFormat" class="meta-value">—</strong>
+                  </div>
+                  <div class="meta-item">
+                    <span class="meta-label">Tỷ lệ khung hình</span>
+                    <strong id="videoAspect" class="meta-value">—</strong>
+                  </div>
+                </div>
+
+                <div class="workspace-actions">
+                  <button id="captureFrameBtn" class="btn btn-secondary">Chụp khung hình hiện tại</button>
+                  <button id="removeVideoBtn" class="btn btn-danger-outline">Gỡ video</button>
+                </div>
+
+                <div id="framePreviewContainer" class="frame-preview hidden">
+                  <div class="frame-preview-head">
+                    <span id="frameTimestampLabel">Khung hình mẫu</span>
+                    <a id="downloadFrameLink" class="text-link" download="frame-mau.png">Tải ảnh PNG</a>
+                  </div>
+                  <img id="capturedFrameImg" alt="Khung hình đã chụp từ video" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Cột phải: Tiến trình 11 bước -->
+            <div class="card">
+              <div class="card-header">
+                <h3>2. Quy trình xử lý tự động</h3>
+                <span class="stage-tag">Đã kích hoạt: Bước 1/11</span>
+              </div>
+
+              <div class="progress-block">
+                <div class="progress-top">
+                  <span id="pipelineStatusText">Chờ tải video đầu vào...</span>
+                  <strong id="pipelinePercent">0%</strong>
+                </div>
+                <div class="progress-track">
+                  <div id="pipelineProgressBar" class="progress-fill" style="width: 0%;"></div>
+                </div>
+              </div>
+
+              <div class="pipeline-controls">
+                <button id="startAutoPipelineBtn" class="btn btn-gradient" disabled>
+                  Bắt đầu xử lý tự động (Mở khóa ở GĐ 7)
+                </button>
+                <p class="helper-text">
+                  Hiện tại bạn đang ở <strong>Giai đoạn 1 & 2</strong> (Giao diện + Đọc/Kiểm tra video).
+                  Nút xử lý toàn trình sẽ tự động mở khóa khi các module AI (GĐ 3 → 7) được tích hợp thật.
+                </p>
+              </div>
+
+              <ol id="pipelineStepsList" class="pipeline-list">
+                <li data-step="1" class="step-item">
+                  <span class="step-dot">1</span>
+                  <div class="step-body">
+                    <strong>Nhận & phân tích video đầu vào</strong>
+                    <small id="step1Desc">Chưa có tệp video</small>
+                  </div>
+                  <span class="step-state" id="step1State">Chờ</span>
+                </li>
+                <li data-step="2" class="step-item locked">
+                  <span class="step-dot">2</span>
+                  <div class="step-body"><strong>Trích xuất âm thanh & nhận diện thoại Trung (Whisper)</strong><small>Tích hợp ở Giai đoạn 3</small></div>
+                  <span class="step-state">GĐ 3</span>
+                </li>
+                <li data-step="3" class="step-item locked">
+                  <span class="step-dot">3</span>
+                  <div class="step-body"><strong>Tạo phụ đề SRT khớp thời gian</strong><small>Tích hợp ở Giai đoạn 3</small></div>
+                  <span class="step-state">GĐ 3</span>
+                </li>
+                <li data-step="4" class="step-item locked">
+                  <span class="step-dot">4</span>
+                  <div class="step-body"><strong>Dịch toàn bộ phụ đề Trung → Việt</strong><small>Tích hợp ở Giai đoạn 4</small></div>
+                  <span class="step-state">GĐ 4</span>
+                </li>
+                <li data-step="5" class="step-item locked">
+                  <span class="step-dot">5</span>
+                  <div class="step-body"><strong>Kiểm tra & chỉnh sửa bản dịch</strong><small>Tích hợp ở Giai đoạn 4</small></div>
+                  <span class="step-state">GĐ 4</span>
+                </li>
+                <li data-step="6" class="step-item locked">
+                  <span class="step-dot">6</span>
+                  <div class="step-body"><strong>Tạo giọng đọc tiếng Việt (TTS)</strong><small>Tích hợp ở Giai đoạn 5</small></div>
+                  <span class="step-state">GĐ 5</span>
+                </li>
+                <li data-step="7" class="step-item locked">
+                  <span class="step-dot">7</span>
+                  <div class="step-body"><strong>Đồng bộ âm thanh theo mốc thời gian</strong><small>Tích hợp ở Giai đoạn 5</small></div>
+                  <span class="step-state">GĐ 5</span>
+                </li>
+                <li data-step="8" class="step-item locked">
+                  <span class="step-dot">8</span>
+                  <div class="step-body"><strong>OCR & Che chữ Trung Quốc trên hình</strong><small>Tích hợp ở Giai đoạn 6</small></div>
+                  <span class="step-state">GĐ 6</span>
+                </li>
+                <li data-step="9" class="step-item locked">
+                  <span class="step-dot">9</span>
+                  <div class="step-body"><strong>Chèn logo KAI TỒ REVIEW tùy chỉnh</strong><small>Tích hợp ở Giai đoạn 6</small></div>
+                  <span class="step-state">GĐ 6</span>
+                </li>
+                <li data-step="10" class="step-item locked">
+                  <span class="step-dot">10</span>
+                  <div class="step-body"><strong>Ghép phụ đề & giọng đọc vào video</strong><small>Tích hợp ở Giai đoạn 7</small></div>
+                  <span class="step-state">GĐ 7</span>
+                </li>
+                <li data-step="11" class="step-item locked">
+                  <span class="step-dot">11</span>
+                  <div class="step-body"><strong>Xuất video MP4 giữ nguyên độ phân giải gốc</strong><small>Tích hợp ở Giai đoạn 7</small></div>
+                  <span class="step-state">GĐ 7</span>
+                </li>
+              </ol>
+            </div>
+          </div>
+        </section>
+
+        <!-- CÁC TAB CHỜ TÍCH HỢP MODULE THẬT (GĐ 3 -> 7) -->
+        <section id="tab-subtitle" class="tab-panel">
+          <div class="card stage-placeholder">
+            <span class="stage-pill">Giai đoạn 3 • modules/subtitle.js</span>
+            <h3>Trích xuất phụ đề tiếng Trung bằng Whisper AI (Trình duyệt)</h3>
+            <p>Module này sẽ tách luồng âm thanh 16kHz trực tiếp từ video bạn vừa nạp, chạy mô hình Whisper qua WebGPU/WASM (chỉ tải mô hình khi bạn bấm chạy) và xuất file <code>.srt</code> chuẩn mốc thời gian.</p>
+          </div>
+        </section>
+
+        <section id="tab-translate" class="tab-panel">
+          <div class="card stage-placeholder">
+            <span class="stage-pill">Giai đoạn 4 • modules/translate.js</span>
+            <h3>Dịch phụ đề Trung → Việt & Trình chỉnh sửa SRT</h3>
+            <p>Hỗ trợ dịch toàn bộ từng dòng không cắt xén, cho phép sửa trực tiếp nội dung và mốc thời gian từng câu thoại trước khi tạo giọng đọc.</p>
+          </div>
+        </section>
+
+        <section id="tab-voice" class="tab-panel">
+          <div class="card stage-placeholder">
+            <span class="stage-pill">Giai đoạn 5 • modules/voice.js</span>
+            <h3>Tạo giọng đọc tiếng Việt & Đồng bộ thời gian</h3>
+            <p>Hỗ trợ chọn giọng đọc, chỉnh tốc độ, âm lượng, nghe thử và xuất file âm thanh <code>.wav/.mp3</code> thật để ghép vào video.</p>
+          </div>
+        </section>
+
+        <section id="tab-mask" class="tab-panel">
+          <div class="card stage-placeholder">
+            <span class="stage-pill">Giai đoạn 6 • modules/ocr.js</span>
+            <h3>Nhận diện chữ Trung Quốc (OCR) & Vùng che làm mờ</h3>
+            <p>Cho phép quét khung hình bằng Tesseract.js và kéo chỉnh trực tiếp vùng làm mờ / che chữ trên khung xem trước video.</p>
+          </div>
+        </section>
+
+        <section id="tab-logo" class="tab-panel">
+          <div class="card stage-placeholder">
+            <span class="stage-pill">Giai đoạn 6 • modules/logo.js</span>
+            <h3>Thêm logo KAI TỒ REVIEW</h3>
+            <p>Tải logo cá nhân (PNG nền trong), chỉnh vị trí, kích thước và độ trong suốt ngay trên màn hình xem trước.</p>
+          </div>
+        </section>
+
+        <section id="tab-export" class="tab-panel">
+          <div class="card stage-placeholder">
+            <span class="stage-pill">Giai đoạn 7 • modules/export.js</span>
+            <h3>Xuất video MP4 hoàn chỉnh (FFmpeg.wasm)</h3>
+            <p>Giữ nguyên độ phân giải gốc (hỗ trợ 1080p khi nguồn đạt chuẩn), tùy chỉnh bitrate, chèn font tiếng Việt không lỗi dấu và tải file MP4 về máy.</p>
+          </div>
+        </section>
+
+        <!-- TAB 8: LỊCH SỬ DỰ ÁN (HOẠT ĐỘNG THẬT) -->
+        <section id="tab-history" class="tab-panel">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3>Lịch sử dự án (Lưu cục bộ trên trình duyệt)</h3>
+                <p class="card-desc">Ghi nhận các video đã phân tích gần đây. Dữ liệu chỉ lưu trong máy của bạn.</p>
+              </div>
+              <button id="clearHistoryBtn" class="btn btn-danger-outline">Xóa lịch sử</button>
+            </div>
+            <div id="historyList" class="history-list"></div>
+          </div>
+        </section>
+
+        <!-- TAB 9: CÀI ĐẶT (HOẠT ĐỘNG THẬT) -->
+        <section id="tab-settings" class="tab-panel">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3>Cài đặt hệ thống & Chất lượng xuất</h3>
+                <p class="card-desc">Cấu hình được lưu tự động cho các bước xử lý AI và xuất video.</p>
+              </div>
+            </div>
+
+            <form id="settingsForm" class="settings-grid">
+              <div class="form-group">
+                <label for="settingQuality">Chế độ độ phân giải xuất</label>
+                <select id="settingQuality">
+                  <option value="source">Giữ nguyên độ phân giải video gốc (Khuyên dùng)</option>
+                  <option value="1080p">Tối đa Full HD 1080p (Không nâng cấp nếu gốc thấp hơn)</option>
+                  <option value="720p">Giảm xuống HD 720p (Nhanh & nhẹ RAM hơn)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="settingBitrate">Chất lượng mã hóa (Bitrate / CRF)</label>
+                <select id="settingBitrate">
+                  <option value="high">Cao — CRF 18 (~6–8 Mbps, gần sát gốc)</option>
+                  <option value="balanced" selected>Cân bằng — CRF 22 (~4 Mbps)</option>
+                  <option value="compact">Gọn nhẹ — CRF 26 (~2 Mbps)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="settingWhisperModel">Mô hình Whisper (Chỉ tải khi dùng GĐ 3)</label>
+                <select id="settingWhisperModel">
+                  <option value="onnx-community/whisper-base">Whisper Base (~150MB — Nhanh)</option>
+                  <option value="onnx-community/whisper-small" selected>Whisper Small (~480MB — Chuẩn tiếng Trung hơn)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="settingTranslateProvider">Nguồn dịch miễn phí (Dùng ở GĐ 4)</label>
+                <select id="settingTranslateProvider">
+                  <option value="mymemory">MyMemory API (Miễn phí, không cần khóa)</option>
+                  <option value="apps_script">Google Apps Script Proxy tự cấu hình (Khuyên dùng)</option>
+                  <option value="offline_nllb">Offline AI NLLB-200 (Chạy trong trình duyệt)</option>
+                </select>
+              </div>
+
+              <div class="form-group full-width">
+                <label for="settingTranslateEndpoint">URL Google Apps Script / Cloudflare Worker (Tùy chọn, miễn phí)</label>
+                <input
+                  type="url"
+                  id="settingTranslateEndpoint"
+                  placeholder="https://script.google.com/macros/s/.../exec (để trống nếu dùng mặc định)"
+                />
+              </div>
+
+              <div class="form-actions full-width">
+                <button type="submit" class="btn btn-primary">Lưu cài đặt</button>
+                <span id="settingsSaveMsg" class="save-msg"></span>
+              </div>
+            </form>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>
