@@ -8,10 +8,8 @@
 </head>
 <body>
   <div class="app-shell">
-    <!-- Overlay cho mobile -->
     <div id="sidebarOverlay" class="sidebar-overlay"></div>
 
-    <!-- Thanh điều hướng bên trái -->
     <aside id="sidebar" class="sidebar">
       <div class="brand">
         <div class="brand-logo" aria-hidden="true">KT</div>
@@ -29,7 +27,6 @@
         <button class="nav-item" data-tab="subtitle">
           <span class="nav-index">02</span>
           <span class="nav-label">Trích xuất phụ đề</span>
-          <span class="badge badge-next">GĐ 3</span>
         </button>
         <button class="nav-item" data-tab="translate">
           <span class="nav-index">03</span>
@@ -76,7 +73,6 @@
       </div>
     </aside>
 
-    <!-- Khu vực nội dung chính -->
     <div class="main-wrapper">
       <header class="topbar">
         <div class="topbar-left">
@@ -95,7 +91,6 @@
         <!-- TAB 1: TRANG CHỦ -->
         <section id="tab-home" class="tab-panel active">
           <div class="grid-home">
-            <!-- Cột trái: Tải & xem trước video -->
             <div class="card">
               <div class="card-header">
                 <h3>1. Video đầu vào</h3>
@@ -109,7 +104,6 @@
                 hidden
               />
 
-              <!-- Khu vực kéo thả -->
               <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="Kéo thả hoặc bấm để chọn video">
                 <div class="drop-icon">🎬</div>
                 <h4>Kéo & thả video tiếng Trung vào đây</h4>
@@ -117,11 +111,9 @@
                 <span class="drop-hint">Giữ nguyên độ phân giải gốc • Không tải file lên máy chủ</span>
               </div>
 
-              <!-- Thông báo lỗi / cảnh báo RAM -->
               <div id="videoErrorBox" class="alert alert-error hidden"></div>
               <div id="memoryWarningBox" class="alert alert-warning hidden"></div>
 
-              <!-- Khu vực hiển thị sau khi nạp video -->
               <div id="videoWorkspace" class="video-workspace hidden">
                 <div class="video-frame-box">
                   <video id="mainVideoPlayer" controls playsinline preload="metadata"></video>
@@ -155,6 +147,7 @@
                 </div>
 
                 <div class="workspace-actions">
+                  <button id="goSubtitleBtn" class="btn btn-primary">Sang bước Trích xuất phụ đề →</button>
                   <button id="captureFrameBtn" class="btn btn-secondary">Chụp khung hình hiện tại</button>
                   <button id="removeVideoBtn" class="btn btn-danger-outline">Gỡ video</button>
                 </div>
@@ -169,11 +162,10 @@
               </div>
             </div>
 
-            <!-- Cột phải: Tiến trình 11 bước -->
             <div class="card">
               <div class="card-header">
                 <h3>2. Quy trình xử lý tự động</h3>
-                <span class="stage-tag">Đã kích hoạt: Bước 1/11</span>
+                <span class="stage-tag">Đã kích hoạt: Bước 1–3/11</span>
               </div>
 
               <div class="progress-block">
@@ -191,8 +183,7 @@
                   Bắt đầu xử lý tự động (Mở khóa ở GĐ 7)
                 </button>
                 <p class="helper-text">
-                  Hiện tại bạn đang ở <strong>Giai đoạn 1 & 2</strong> (Giao diện + Đọc/Kiểm tra video).
-                  Nút xử lý toàn trình sẽ tự động mở khóa khi các module AI (GĐ 3 → 7) được tích hợp thật.
+                  Đã kích hoạt <strong>Giai đoạn 1–3</strong> (Đọc video + Whisper AI nhận diện phụ đề tiếng Trung ra file SRT).
                 </p>
               </div>
 
@@ -205,15 +196,21 @@
                   </div>
                   <span class="step-state" id="step1State">Chờ</span>
                 </li>
-                <li data-step="2" class="step-item locked">
+                <li data-step="2" class="step-item">
                   <span class="step-dot">2</span>
-                  <div class="step-body"><strong>Trích xuất âm thanh & nhận diện thoại Trung (Whisper)</strong><small>Tích hợp ở Giai đoạn 3</small></div>
-                  <span class="step-state">GĐ 3</span>
+                  <div class="step-body">
+                    <strong>Trích xuất âm thanh & nhận diện thoại Trung (Whisper)</strong>
+                    <small id="step2Desc">Chuyển sang mục 02 để chạy Whisper AI</small>
+                  </div>
+                  <span class="step-state" id="step2State">Sẵn sàng</span>
                 </li>
-                <li data-step="3" class="step-item locked">
+                <li data-step="3" class="step-item">
                   <span class="step-dot">3</span>
-                  <div class="step-body"><strong>Tạo phụ đề SRT khớp thời gian</strong><small>Tích hợp ở Giai đoạn 3</small></div>
-                  <span class="step-state">GĐ 3</span>
+                  <div class="step-body">
+                    <strong>Tạo phụ đề SRT khớp thời gian</strong>
+                    <small id="step3Desc">Chưa có dòng phụ đề</small>
+                  </div>
+                  <span class="step-state" id="step3State">Chờ</span>
                 </li>
                 <li data-step="4" class="step-item locked">
                   <span class="step-dot">4</span>
@@ -260,15 +257,74 @@
           </div>
         </section>
 
-        <!-- CÁC TAB CHỜ TÍCH HỢP MODULE THẬT (GĐ 3 -> 7) -->
+        <!-- TAB 2: TRÍCH XUẤT PHỤ ĐỀ (HOẠT ĐỘNG THẬT - GĐ 3) -->
         <section id="tab-subtitle" class="tab-panel">
-          <div class="card stage-placeholder">
-            <span class="stage-pill">Giai đoạn 3 • modules/subtitle.js</span>
-            <h3>Trích xuất phụ đề tiếng Trung bằng Whisper AI (Trình duyệt)</h3>
-            <p>Module này sẽ tách luồng âm thanh 16kHz trực tiếp từ video bạn vừa nạp, chạy mô hình Whisper qua WebGPU/WASM (chỉ tải mô hình khi bạn bấm chạy) và xuất file <code>.srt</code> chuẩn mốc thời gian.</p>
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3>Nhận diện giọng nói tiếng Trung (Whisper AI trên trình duyệt)</h3>
+                <p class="card-desc">Mô hình AI chỉ tải về trình duyệt khi bạn bấm bắt đầu và được lưu cache cho lần sau.</p>
+              </div>
+              <span id="subSourceStatus" class="status-chip">Chưa có video hoặc file âm thanh</span>
+            </div>
+
+            <div class="settings-grid sub-controls-grid">
+              <div class="form-group">
+                <label for="subModelSelect">Chọn mô hình Whisper</label>
+                <select id="subModelSelect">
+                  <option value="onnx-community/whisper-tiny">Whisper Tiny (~75MB — Rất nhanh, dùng để test)</option>
+                  <option value="onnx-community/whisper-base">Whisper Base (~150MB — Cân bằng)</option>
+                  <option value="onnx-community/whisper-small" selected>Whisper Small (~480MB — Chuẩn tiếng Trung nhất)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="subDeviceSelect">Phần cứng xử lý</label>
+                <select id="subDeviceSelect">
+                  <option value="auto" selected>Tự động (Ưu tiên WebGPU NVIDIA)</option>
+                  <option value="wasm">CPU (WebAssembly — ổn định khi GPU lỗi)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="workspace-actions">
+              <button id="subStartBtn" class="btn btn-primary" disabled>Bắt đầu nhận diện tiếng Trung</button>
+              <button id="subStopBtn" class="btn btn-danger-outline" disabled>Dừng xử lý</button>
+              <button id="subImportAudioBtn" class="btn btn-secondary">Chọn file âm thanh rời (MP3/WAV)</button>
+              <button id="subImportSrtBtn" class="btn btn-secondary">Nhập file SRT có sẵn</button>
+              <input type="file" id="subAudioInput" accept="audio/*,.mp3,.wav,.m4a,.ogg" hidden />
+              <input type="file" id="subSrtInput" accept=".srt,text/plain" hidden />
+            </div>
+
+            <div id="subErrorBox" class="alert alert-error hidden"></div>
+
+            <div id="subProgressBox" class="progress-block sub-progress-box hidden">
+              <div class="progress-top">
+                <span id="subProgressText">Đang chuẩn bị...</span>
+                <strong id="subProgressPercent">0%</strong>
+              </div>
+              <div class="progress-track">
+                <div id="subProgressBar" class="progress-fill" style="width: 0%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card sub-editor-card">
+            <div class="card-header">
+              <div class="sub-head-left">
+                <h3>Danh sách phụ đề SRT tiếng Trung</h3>
+                <span id="subCountBadge" class="stage-tag">0 dòng</span>
+              </div>
+              <div class="sub-head-actions">
+                <button id="subAddLineBtn" class="btn btn-secondary">+ Thêm dòng</button>
+                <button id="subDownloadSrtBtn" class="btn btn-primary" disabled>Tải file .SRT</button>
+              </div>
+            </div>
+            <div id="subListContainer" class="srt-list"></div>
           </div>
         </section>
 
+        <!-- CÁC TAB CHỜ GĐ 4 -> 7 -->
         <section id="tab-translate" class="tab-panel">
           <div class="card stage-placeholder">
             <span class="stage-pill">Giai đoạn 4 • modules/translate.js</span>
@@ -309,7 +365,7 @@
           </div>
         </section>
 
-        <!-- TAB 8: LỊCH SỬ DỰ ÁN (HOẠT ĐỘNG THẬT) -->
+        <!-- TAB 8: LỊCH SỬ DỰ ÁN -->
         <section id="tab-history" class="tab-panel">
           <div class="card">
             <div class="card-header">
@@ -323,7 +379,7 @@
           </div>
         </section>
 
-        <!-- TAB 9: CÀI ĐẶT (HOẠT ĐỘNG THẬT) -->
+        <!-- TAB 9: CÀI ĐẶT -->
         <section id="tab-settings" class="tab-panel">
           <div class="card">
             <div class="card-header">
@@ -353,9 +409,10 @@
               </div>
 
               <div class="form-group">
-                <label for="settingWhisperModel">Mô hình Whisper (Chỉ tải khi dùng GĐ 3)</label>
+                <label for="settingWhisperModel">Mô hình Whisper mặc định</label>
                 <select id="settingWhisperModel">
-                  <option value="onnx-community/whisper-base">Whisper Base (~150MB — Nhanh)</option>
+                  <option value="onnx-community/whisper-tiny">Whisper Tiny (~75MB — Rất nhanh)</option>
+                  <option value="onnx-community/whisper-base">Whisper Base (~150MB — Cân bằng)</option>
                   <option value="onnx-community/whisper-small" selected>Whisper Small (~480MB — Chuẩn tiếng Trung hơn)</option>
                 </select>
               </div>
