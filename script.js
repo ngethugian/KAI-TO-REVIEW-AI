@@ -1,6 +1,7 @@
 import { VideoManager } from './modules/video.js';
 import { SubtitleManager } from './modules/subtitle.js';
 import { TranslateManager } from './modules/translate.js';
+import { VoiceManager } from './modules/voice.js';
 
 const STORAGE_KEYS = {
   HISTORY: 'kaito_review_ai_history_v1',
@@ -12,7 +13,7 @@ const TAB_META = {
   home: ['Trang chủ', 'Tải video tiếng Trung đầu vào và theo dõi quy trình Việt hóa tự động'],
   subtitle: ['Trích xuất phụ đề', 'Nhận diện giọng nói tiếng Trung bằng Whisper AI và tạo file SRT chuẩn thời gian'],
   translate: ['Dịch phụ đề', 'Dịch toàn bộ phụ đề Trung → Việt miễn phí và chỉnh sửa song ngữ trực tiếp'],
-  voice: ['Tạo giọng đọc', 'Chuyển phụ đề thành giọng đọc tiếng Việt và đồng bộ thời gian (Giai đoạn 5)'],
+  voice: ['Tạo giọng đọc', 'Chuyển phụ đề thành giọng đọc tiếng Việt và đồng bộ âm thanh khớp thời gian'],
   mask: ['Che chữ video', 'Nhận diện chữ Trung Quốc và tạo vùng làm mờ/che tùy chỉnh (Giai đoạn 6)'],
   logo: ['Thêm logo', 'Tải logo cá nhân, chỉnh vị trí, kích thước và độ trong suốt (Giai đoạn 6)'],
   export: ['Xuất video', 'Ghép âm thanh, phụ đề, logo và xuất file MP4 giữ độ phân giải gốc (Giai đoạn 7)'],
@@ -24,6 +25,9 @@ export const AppState = {
   videoFile: null,
   videoMeta: null,
   subtitles: [],
+  voiceAudioBlob: null,
+  voiceAudioUrl: null,
+  voiceMeta: null,
   settings: loadSettings()
 };
 
@@ -65,7 +69,7 @@ function saveSrtDraft() {
     );
     updateDraftButtons();
   } catch {
-    // Bỏ qua nếu vượt dung lượng localStorage
+    // ignore
   }
 }
 
@@ -233,13 +237,17 @@ function updatePipelineProgress() {
   const subs = AppState.subtitles;
   const hasSubs = subs.length > 0;
   const translatedCount = subs.filter((s) => (s.translatedText || '').trim().length > 0).length;
+  const hasVoice = Boolean(AppState.voiceAudioBlob);
 
   let pct = 0;
   let text = 'Chờ tải video đầu vào...';
 
-  if (hasSubs && translatedCount > 0) {
+  if (hasVoice) {
+    pct = 64;
+    text = 'Hoàn tất Bước 1–7 (Đã có giọng đọc đồng bộ) — Sẵn sàng cho Che chữ & Logo (GĐ 6)';
+  } else if (hasSubs && translatedCount > 0) {
     pct = 45;
-    text = `Hoàn tất Bước 1–5 (${translatedCount}/${subs.length} dòng tiếng Việt) — Sẵn sàng cho Giọng đọc (GĐ 5)`;
+    text = `Hoàn tất Bước 1–5 (${translatedCount}/${subs.length} dòng tiếng Việt) — Chuyển sang mục "04 Tạo giọng đọc"`;
   } else if (hasSubs) {
     pct = 27;
     text = `Hoàn tất Bước 1–3 (${subs.length} dòng SRT) — Chuyển sang mục "03 Dịch phụ đề"`;
@@ -323,6 +331,30 @@ function updateSteps2345UI(subtitles) {
   updatePipelineProgress();
 }
 
+function updateSteps67UI(info) {
+  const step6 = document.querySelector('[data-step="6"]');
+  const step7 = document.querySelector('[data-step="7"]');
+
+  if (info) {
+    step6.classList.add('done');
+    document.getElementById('step6Desc').textContent = info.sourceLabel;
+    document.getElementById('step6State').textContent = 'Xong';
+
+    step7.classList.add('done');
+    document.getElementById('step7Desc').textContent = 'Bản âm thanh WAV đã đồng bộ sẵn sàng ghép video';
+    document.getElementById('step7State').textContent = 'Xong';
+  } else {
+    step6.classList.remove('done');
+    document.getElementById('step6Desc').textContent = 'Chuyển sang mục 04 để tạo giọng đọc';
+    document.getElementById('step6State').textContent = 'Sẵn sàng';
+
+    step7.classList.remove('done');
+    document.getElementById('step7Desc').textContent = 'Chưa có bản ghép âm thanh';
+    document.getElementById('step7State').textContent = 'Chờ';
+  }
+  updatePipelineProgress();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   initNavigation();
   renderHistory();
@@ -336,9 +368,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('goSubtitleBtn').addEventListener('click', () => switchTabFn('subtitle'));
   document.getElementById('goTranslateBtn').addEventListener('click', () => switchTabFn('translate'));
+  document.getElementById('goVoiceBtn').addEventListener('click', () => switchTabFn('voice'));
 
   let subtitleManager;
   let translateManager;
+  let voiceManager;
 
   const restoreDraft = () => {
     const draft = loadSrtDraft();
@@ -347,6 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
     subtitleManager.subtitles = draft.subtitles;
     subtitleManager.renderSubtitles();
     translateManager.refresh();
+    voiceManager.refresh();
     updateSteps2345UI(draft.subtitles);
     switchTabFn('translate');
   };
@@ -379,6 +414,7 @@ document.addEventListener('DOMContentLoaded', () => {
       onSubtitlesUpdated: (subs) => {
         updateSteps2345UI(subs);
         translateManager.refresh();
+        voiceManager.refresh();
         saveSrtDraft();
       }
     }
@@ -409,10 +445,46 @@ document.addEventListener('DOMContentLoaded', () => {
       onTranslationsUpdated: (subs) => {
         subtitleManager.subtitles = subs;
         subtitleManager.renderSubtitles();
+        voiceManager.refresh();
         updateSteps2345UI(subs);
         saveSrtDraft();
       },
       onRestoreDraft: restoreDraft
+    }
+  );
+
+  voiceManager = new VoiceManager(
+    {
+      sourceStatus: document.getElementById('voiceSourceStatus'),
+      engineSelect: document.getElementById('voiceEngineSelect'),
+      proxySettings: document.getElementById('voiceProxySettings'),
+      voiceNameSelect: document.getElementById('voiceNameSelect'),
+      proxyUrlInput: document.getElementById('voiceProxyUrlInput'),
+      speedRange: document.getElementById('voiceSpeedRange'),
+      speedValue: document.getElementById('voiceSpeedValue'),
+      volumeRange: document.getElementById('voiceVolumeRange'),
+      volumeValue: document.getElementById('voiceVolumeValue'),
+      syncModeSelect: document.getElementById('voiceSyncModeSelect'),
+      generateBtn: document.getElementById('voiceGenerateBtn'),
+      stopBtn: document.getElementById('voiceStopBtn'),
+      remixBtn: document.getElementById('voiceRemixBtn'),
+      importAudioBtn: document.getElementById('voiceImportAudioBtn'),
+      audioInput: document.getElementById('voiceAudioInput'),
+      errorBox: document.getElementById('voiceErrorBox'),
+      progressBox: document.getElementById('voiceProgressBox'),
+      progressText: document.getElementById('voiceProgressText'),
+      progressPercent: document.getElementById('voiceProgressPercent'),
+      progressBar: document.getElementById('voiceProgressBar'),
+      masterCard: document.getElementById('voiceMasterCard'),
+      masterInfo: document.getElementById('voiceMasterInfo'),
+      masterPlayer: document.getElementById('voiceMasterPlayer'),
+      downloadBtn: document.getElementById('voiceDownloadBtn'),
+      countBadge: document.getElementById('voiceCountBadge'),
+      listContainer: document.getElementById('voiceListContainer')
+    },
+    AppState,
+    {
+      onVoiceReady: (_blob, info) => updateSteps67UI(info)
     }
   );
 
