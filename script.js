@@ -1,20 +1,22 @@
 import { VideoManager } from './modules/video.js';
 import { SubtitleManager } from './modules/subtitle.js';
+import { TranslateManager } from './modules/translate.js';
 
 const STORAGE_KEYS = {
   HISTORY: 'kaito_review_ai_history_v1',
-  SETTINGS: 'kaito_review_ai_settings_v1'
+  SETTINGS: 'kaito_review_ai_settings_v1',
+  SRT_DRAFT: 'kaito_review_ai_srt_draft_v1'
 };
 
 const TAB_META = {
   home: ['Trang chủ', 'Tải video tiếng Trung đầu vào và theo dõi quy trình Việt hóa tự động'],
   subtitle: ['Trích xuất phụ đề', 'Nhận diện giọng nói tiếng Trung bằng Whisper AI và tạo file SRT chuẩn thời gian'],
-  translate: ['Dịch phụ đề', 'Dịch Trung → Việt đầy đủ nội dung và chỉnh sửa trực tiếp (Giai đoạn 4)'],
+  translate: ['Dịch phụ đề', 'Dịch toàn bộ phụ đề Trung → Việt miễn phí và chỉnh sửa song ngữ trực tiếp'],
   voice: ['Tạo giọng đọc', 'Chuyển phụ đề thành giọng đọc tiếng Việt và đồng bộ thời gian (Giai đoạn 5)'],
   mask: ['Che chữ video', 'Nhận diện chữ Trung Quốc và tạo vùng làm mờ/che tùy chỉnh (Giai đoạn 6)'],
   logo: ['Thêm logo', 'Tải logo cá nhân, chỉnh vị trí, kích thước và độ trong suốt (Giai đoạn 6)'],
   export: ['Xuất video', 'Ghép âm thanh, phụ đề, logo và xuất file MP4 giữ độ phân giải gốc (Giai đoạn 7)'],
-  history: ['Lịch sử dự án', 'Danh sách các video đã nạp và xử lý trên trình duyệt này'],
+  history: ['Lịch sử dự án', 'Danh sách các video đã nạp và bản nháp SRT lưu trên trình duyệt này'],
   settings: ['Cài đặt', 'Tùy chỉnh chất lượng xuất, mô hình AI và nguồn dịch miễn phí']
 };
 
@@ -30,12 +32,16 @@ function loadSettings() {
     quality: 'source',
     bitrate: 'balanced',
     whisperModel: 'onnx-community/whisper-small',
-    translateProvider: 'mymemory',
+    translateProvider: 'google_gtx',
     translateEndpoint: ''
   };
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.SETTINGS) || '{}');
-    return { ...defaults, ...saved };
+    const merged = { ...defaults, ...saved };
+    if (!['google_gtx', 'mymemory', 'apps_script'].includes(merged.translateProvider)) {
+      merged.translateProvider = 'google_gtx';
+    }
+    return merged;
   } catch {
     return defaults;
   }
@@ -44,6 +50,46 @@ function loadSettings() {
 function saveSettings(settings) {
   AppState.settings = settings;
   localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+}
+
+function saveSrtDraft() {
+  if (!AppState.subtitles.length) return;
+  try {
+    localStorage.setItem(
+      STORAGE_KEYS.SRT_DRAFT,
+      JSON.stringify({
+        videoName: AppState.videoMeta?.name || 'Dự án SRT',
+        savedAt: new Date().toLocaleString('vi-VN'),
+        subtitles: AppState.subtitles
+      })
+    );
+    updateDraftButtons();
+  } catch {
+    // Bỏ qua nếu vượt dung lượng localStorage
+  }
+}
+
+function loadSrtDraft() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.SRT_DRAFT);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed?.subtitles) && parsed.subtitles.length > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function updateDraftButtons() {
+  const draft = loadSrtDraft();
+  const trBtn = document.getElementById('trRestoreDraftBtn');
+  const histBtn = document.getElementById('historyRestoreDraftBtn');
+  const hasDraft = Boolean(draft);
+  trBtn.classList.toggle('hidden', !hasDraft);
+  histBtn.classList.toggle('hidden', !hasDraft);
+  if (hasDraft) {
+    trBtn.textContent = `Khôi phục bản lưu (${draft.subtitles.length} dòng)`;
+  }
 }
 
 function getHistory() {
@@ -184,17 +230,22 @@ function updatePipelineProgress() {
   const statusText = document.getElementById('pipelineStatusText');
 
   const hasVideo = Boolean(AppState.videoFile);
-  const hasSubs = AppState.subtitles.length > 0;
+  const subs = AppState.subtitles;
+  const hasSubs = subs.length > 0;
+  const translatedCount = subs.filter((s) => (s.translatedText || '').trim().length > 0).length;
 
   let pct = 0;
   let text = 'Chờ tải video đầu vào...';
 
-  if (hasVideo && !hasSubs) {
-    pct = 9;
-    text = 'Bước 1 hoàn tất — Chuyển sang mục "02 Trích xuất phụ đề" để chạy Whisper AI';
+  if (hasSubs && translatedCount > 0) {
+    pct = 45;
+    text = `Hoàn tất Bước 1–5 (${translatedCount}/${subs.length} dòng tiếng Việt) — Sẵn sàng cho Giọng đọc (GĐ 5)`;
   } else if (hasSubs) {
     pct = 27;
-    text = `Hoàn tất Bước 1–3 (${AppState.subtitles.length} dòng SRT) — Sẵn sàng cho Dịch thuật (GĐ 4)`;
+    text = `Hoàn tất Bước 1–3 (${subs.length} dòng SRT) — Chuyển sang mục "03 Dịch phụ đề"`;
+  } else if (hasVideo) {
+    pct = 9;
+    text = 'Bước 1 hoàn tất — Chuyển sang mục "02 Trích xuất phụ đề" để chạy Whisper AI';
   }
 
   progressBar.style.width = `${pct}%`;
@@ -224,37 +275,58 @@ function updateStep1UI(loaded, meta = null) {
   updatePipelineProgress();
 }
 
-function updateSteps23UI(subtitles) {
+function updateSteps2345UI(subtitles) {
   const step2 = document.querySelector('[data-step="2"]');
   const step3 = document.querySelector('[data-step="3"]');
-  const step2Desc = document.getElementById('step2Desc');
-  const step2State = document.getElementById('step2State');
-  const step3Desc = document.getElementById('step3Desc');
-  const step3State = document.getElementById('step3State');
+  const step4 = document.querySelector('[data-step="4"]');
+  const step5 = document.querySelector('[data-step="5"]');
 
-  if (subtitles.length > 0) {
+  const total = subtitles.length;
+  const translated = subtitles.filter((s) => (s.translatedText || '').trim().length > 0).length;
+
+  if (total > 0) {
     step2.classList.add('done');
-    step2Desc.textContent = 'Đã nhận diện giọng nói tiếng Trung';
-    step2State.textContent = 'Xong';
+    document.getElementById('step2Desc').textContent = 'Đã nhận diện giọng nói tiếng Trung';
+    document.getElementById('step2State').textContent = 'Xong';
 
     step3.classList.add('done');
-    step3Desc.textContent = `Đã tạo ${subtitles.length} dòng phụ đề SRT`;
-    step3State.textContent = 'Xong';
+    document.getElementById('step3Desc').textContent = `Đã tạo ${total} dòng phụ đề SRT`;
+    document.getElementById('step3State').textContent = 'Xong';
   } else {
     step2.classList.remove('done');
-    step2Desc.textContent = 'Chuyển sang mục 02 để chạy Whisper AI';
-    step2State.textContent = 'Sẵn sàng';
+    document.getElementById('step2Desc').textContent = 'Chuyển sang mục 02 để chạy Whisper AI';
+    document.getElementById('step2State').textContent = 'Sẵn sàng';
 
     step3.classList.remove('done');
-    step3Desc.textContent = 'Chưa có dòng phụ đề';
-    step3State.textContent = 'Chờ';
+    document.getElementById('step3Desc').textContent = 'Chưa có dòng phụ đề';
+    document.getElementById('step3State').textContent = 'Chờ';
   }
+
+  if (translated > 0) {
+    step4.classList.add('done');
+    document.getElementById('step4Desc').textContent = `Đã dịch ${translated}/${total} dòng sang tiếng Việt`;
+    document.getElementById('step4State').textContent = translated === total ? 'Xong' : 'Đang dịch';
+
+    step5.classList.add('done');
+    document.getElementById('step5Desc').textContent = 'Có thể chỉnh sửa và tải file SRT tiếng Việt';
+    document.getElementById('step5State').textContent = 'Sẵn sàng';
+  } else {
+    step4.classList.remove('done');
+    document.getElementById('step4Desc').textContent = 'Chuyển sang mục 03 để dịch miễn phí';
+    document.getElementById('step4State').textContent = 'Sẵn sàng';
+
+    step5.classList.remove('done');
+    document.getElementById('step5Desc').textContent = 'Chưa có bản dịch tiếng Việt';
+    document.getElementById('step5State').textContent = 'Chờ';
+  }
+
   updatePipelineProgress();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
   initNavigation();
   renderHistory();
+  updateDraftButtons();
   detectHardwareSupport();
 
   document.getElementById('clearHistoryBtn').addEventListener('click', () => {
@@ -262,11 +334,26 @@ document.addEventListener('DOMContentLoaded', () => {
     renderHistory();
   });
 
-  document.getElementById('goSubtitleBtn').addEventListener('click', () => {
-    switchTabFn('subtitle');
-  });
+  document.getElementById('goSubtitleBtn').addEventListener('click', () => switchTabFn('subtitle'));
+  document.getElementById('goTranslateBtn').addEventListener('click', () => switchTabFn('translate'));
 
-  const subtitleManager = new SubtitleManager(
+  let subtitleManager;
+  let translateManager;
+
+  const restoreDraft = () => {
+    const draft = loadSrtDraft();
+    if (!draft) return;
+    AppState.subtitles = draft.subtitles;
+    subtitleManager.subtitles = draft.subtitles;
+    subtitleManager.renderSubtitles();
+    translateManager.refresh();
+    updateSteps2345UI(draft.subtitles);
+    switchTabFn('translate');
+  };
+
+  document.getElementById('historyRestoreDraftBtn').addEventListener('click', restoreDraft);
+
+  subtitleManager = new SubtitleManager(
     {
       sourceStatus: document.getElementById('subSourceStatus'),
       modelSelect: document.getElementById('subModelSelect'),
@@ -289,11 +376,50 @@ document.addEventListener('DOMContentLoaded', () => {
     },
     AppState,
     {
-      onSubtitlesUpdated: (subs) => updateSteps23UI(subs)
+      onSubtitlesUpdated: (subs) => {
+        updateSteps2345UI(subs);
+        translateManager.refresh();
+        saveSrtDraft();
+      }
     }
   );
 
-  initSettingsForm(() => subtitleManager.syncModelFromSettings());
+  translateManager = new TranslateManager(
+    {
+      sourceStatus: document.getElementById('trSourceStatus'),
+      providerSelect: document.getElementById('trProviderSelect'),
+      startBtn: document.getElementById('trStartBtn'),
+      missingBtn: document.getElementById('trMissingBtn'),
+      stopBtn: document.getElementById('trStopBtn'),
+      importSrtBtn: document.getElementById('trImportSrtBtn'),
+      srtInput: document.getElementById('trSrtInput'),
+      restoreDraftBtn: document.getElementById('trRestoreDraftBtn'),
+      errorBox: document.getElementById('trErrorBox'),
+      progressBox: document.getElementById('trProgressBox'),
+      progressText: document.getElementById('trProgressText'),
+      progressPercent: document.getElementById('trProgressPercent'),
+      progressBar: document.getElementById('trProgressBar'),
+      countBadge: document.getElementById('trCountBadge'),
+      downloadViBtn: document.getElementById('trDownloadViBtn'),
+      downloadBilingualBtn: document.getElementById('trDownloadBilingualBtn'),
+      listContainer: document.getElementById('trListContainer')
+    },
+    AppState,
+    {
+      onTranslationsUpdated: (subs) => {
+        subtitleManager.subtitles = subs;
+        subtitleManager.renderSubtitles();
+        updateSteps2345UI(subs);
+        saveSrtDraft();
+      },
+      onRestoreDraft: restoreDraft
+    }
+  );
+
+  initSettingsForm(() => {
+    subtitleManager.syncModelFromSettings();
+    translateManager.syncProviderFromSettings();
+  });
 
   new VideoManager(
     {
