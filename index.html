@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KAI TỒ REVIEW AI – Video Translator Studio</title>
-  <link rel="stylesheet" href="./style.css?v=4" />
+  <link rel="stylesheet" href="./style.css?v=5" />
 </head>
 <body>
   <div class="app-shell">
@@ -35,7 +35,6 @@
         <button class="nav-item" data-tab="voice">
           <span class="nav-index">04</span>
           <span class="nav-label">Tạo giọng đọc</span>
-          <span class="badge badge-next">GĐ 5</span>
         </button>
         <button class="nav-item" data-tab="mask">
           <span class="nav-index">05</span>
@@ -164,7 +163,7 @@
             <div class="card">
               <div class="card-header">
                 <h3>2. Quy trình xử lý tự động</h3>
-                <span class="stage-tag">Đã kích hoạt: Bước 1–5/11</span>
+                <span class="stage-tag">Đã kích hoạt: Bước 1–7/11</span>
               </div>
 
               <div class="progress-block">
@@ -182,7 +181,7 @@
                   Bắt đầu xử lý tự động (Mở khóa ở GĐ 7)
                 </button>
                 <p class="helper-text">
-                  Đã kích hoạt <strong>Giai đoạn 1–4</strong> (Đọc video + Whisper AI nhận diện SRT + Dịch Trung → Việt & chỉnh sửa song ngữ).
+                  Đã kích hoạt <strong>Giai đoạn 1–5</strong> (Video + Whisper SRT + Dịch AI + Tạo giọng đọc & Đồng bộ thời gian).
                 </p>
               </div>
 
@@ -227,15 +226,21 @@
                   </div>
                   <span class="step-state" id="step5State">Chờ</span>
                 </li>
-                <li data-step="6" class="step-item locked">
+                <li data-step="6" class="step-item">
                   <span class="step-dot">6</span>
-                  <div class="step-body"><strong>Tạo giọng đọc tiếng Việt (TTS)</strong><small>Tích hợp ở Giai đoạn 5</small></div>
-                  <span class="step-state">GĐ 5</span>
+                  <div class="step-body">
+                    <strong>Tạo giọng đọc tiếng Việt (TTS)</strong>
+                    <small id="step6Desc">Chuyển sang mục 04 để tạo giọng đọc</small>
+                  </div>
+                  <span class="step-state" id="step6State">Sẵn sàng</span>
                 </li>
-                <li data-step="7" class="step-item locked">
+                <li data-step="7" class="step-item">
                   <span class="step-dot">7</span>
-                  <div class="step-body"><strong>Đồng bộ âm thanh theo mốc thời gian</strong><small>Tích hợp ở Giai đoạn 5</small></div>
-                  <span class="step-state">GĐ 5</span>
+                  <div class="step-body">
+                    <strong>Đồng bộ âm thanh theo mốc thời gian</strong>
+                    <small id="step7Desc">Chưa có bản ghép âm thanh</small>
+                  </div>
+                  <span class="step-state" id="step7State">Chờ</span>
                 </li>
                 <li data-step="8" class="step-item locked">
                   <span class="step-dot">8</span>
@@ -330,7 +335,7 @@
           </div>
         </section>
 
-        <!-- TAB 3: DỊCH PHỤ ĐỀ (HOẠT ĐỘNG THẬT - GĐ 4) -->
+        <!-- TAB 3: DỊCH PHỤ ĐỀ (GĐ 4) -->
         <section id="tab-translate" class="tab-panel">
           <div class="card">
             <div class="card-header">
@@ -345,9 +350,7 @@
               <div class="form-group full-width">
                 <label for="trProviderSelect">Nguồn dịch miễn phí</label>
                 <select id="trProviderSelect">
-                  <option value="google_gtx" selected>Google Dịch miễn phí (Nhanh, tự dự phòng MyMemory — Khuyên dùng)</option>
-                  <option value="mymemory">MyMemory API (Miễn phí, không cần khóa)</option>
-                  <option value="apps_script">Google Apps Script Proxy (Dùng URL đã nhập ở mục 09 Cài đặt)</option>
+                  <option value="google_gtx" selected>Google Dịch theo cụm ngữ cảnh</option>
                 </select>
               </div>
             </div>
@@ -382,22 +385,121 @@
               </div>
               <div class="sub-head-actions">
                 <button id="trDownloadBilingualBtn" class="btn btn-secondary" disabled>Tải SRT song ngữ</button>
-                <button id="trDownloadViBtn" class="btn btn-primary" disabled>Tải .SRT tiếng Việt</button>
+                <button id="trDownloadViBtn" class="btn btn-secondary" disabled>Tải .SRT tiếng Việt</button>
+                <button id="goVoiceBtn" class="btn btn-primary">Sang bước Tạo giọng đọc →</button>
               </div>
             </div>
             <div id="trListContainer" class="srt-list"></div>
           </div>
         </section>
 
-        <!-- CÁC TAB CHỜ GĐ 5 -> 7 -->
+        <!-- TAB 4: TẠO GIỌNG ĐỌC (HOẠT ĐỘNG THẬT - GĐ 5) -->
         <section id="tab-voice" class="tab-panel">
-          <div class="card stage-placeholder">
-            <span class="stage-pill">Giai đoạn 5 • modules/voice.js</span>
-            <h3>Tạo giọng đọc tiếng Việt & Đồng bộ thời gian</h3>
-            <p>Hỗ trợ chọn giọng đọc, chỉnh tốc độ, âm lượng, nghe thử và xuất file âm thanh <code>.wav/.mp3</code> thật để ghép vào video.</p>
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3>Tạo giọng đọc tiếng Việt & Đồng bộ thời gian</h3>
+                <p class="card-desc">Tạo tệp âm thanh thật khớp từng câu thoại SRT để phát xem trước hoặc ghép thẳng vào video ở GĐ 7.</p>
+              </div>
+              <span id="voiceSourceStatus" class="status-chip">Chưa có phụ đề tiếng Việt</span>
+            </div>
+
+            <div class="settings-grid">
+              <div class="form-group full-width">
+                <label for="voiceEngineSelect">Công nghệ tạo giọng đọc</label>
+                <select id="voiceEngineSelect">
+                  <option value="mms_offline">AI Tiếng Việt Offline trên trình duyệt (Xenova/mms-tts-vie ~38MB — Miễn phí 100%, không cần server)</option>
+                  <option value="custom_proxy">Proxy Edge-TTS miễn phí (Giọng Hoài My / Nam Minh tự nhiên — Nhập URL Worker)</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="voiceProxySettings" class="settings-grid hidden" style="margin-top: 12px;">
+              <div class="form-group">
+                <label for="voiceNameSelect">Chọn giọng Edge-TTS</label>
+                <select id="voiceNameSelect">
+                  <option value="vi-VN-HoaiMyNeural">Hoài My — Nữ miền Bắc (Tự nhiên)</option>
+                  <option value="vi-VN-NamMinhNeural">Nam Minh — Nam trầm ấm (Review phim)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="voiceProxyUrlInput">URL Proxy TTS (Cloudflare Worker miễn phí)</label>
+                <input type="url" id="voiceProxyUrlInput" placeholder="https://your-tts-worker.workers.dev/tts" />
+              </div>
+            </div>
+
+            <div class="voice-sliders-grid">
+              <div class="form-group">
+                <div class="range-label-row">
+                  <label for="voiceSpeedRange">Tốc độ đọc (Giữ cao độ)</label>
+                  <strong id="voiceSpeedValue">1.05x</strong>
+                </div>
+                <input type="range" id="voiceSpeedRange" min="0.8" max="1.5" step="0.05" value="1.05" />
+              </div>
+
+              <div class="form-group">
+                <div class="range-label-row">
+                  <label for="voiceVolumeRange">Âm lượng giọng đọc</label>
+                  <strong id="voiceVolumeValue">100%</strong>
+                </div>
+                <input type="range" id="voiceVolumeRange" min="50" max="200" step="5" value="100" />
+              </div>
+
+              <div class="form-group">
+                <label for="voiceSyncModeSelect">Cách đồng bộ mốc thời gian</label>
+                <select id="voiceSyncModeSelect">
+                  <option value="autofit" selected>Tự nén nhẹ tốc độ tránh đè câu sau (Khuyên dùng)</option>
+                  <option value="shift">Giữ tốc độ gốc, tự đẩy nhẹ câu sau nếu tràn</option>
+                  <option value="strict">Đặt đúng tuyệt đối mốc giây SRT</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="workspace-actions">
+              <button id="voiceGenerateBtn" class="btn btn-primary" disabled>Tạo toàn bộ giọng đọc & Đồng bộ</button>
+              <button id="voiceStopBtn" class="btn btn-danger-outline" disabled>Dừng tạo giọng</button>
+              <button id="voiceRemixBtn" class="btn btn-secondary" disabled>Áp dụng lại tốc độ & âm lượng</button>
+              <button id="voiceImportAudioBtn" class="btn btn-secondary">Nhập file giọng đọc có sẵn (MP3/WAV)</button>
+              <input type="file" id="voiceAudioInput" accept="audio/*,.mp3,.wav,.m4a,.ogg" hidden />
+            </div>
+
+            <div id="voiceErrorBox" class="alert alert-error hidden"></div>
+
+            <div id="voiceProgressBox" class="progress-block sub-progress-box hidden">
+              <div class="progress-top">
+                <span id="voiceProgressText">Đang chuẩn bị...</span>
+                <strong id="voiceProgressPercent">0%</strong>
+              </div>
+              <div class="progress-track">
+                <div id="voiceProgressBar" class="progress-fill" style="width: 0%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Trình phát bản âm thanh tổng đã đồng bộ -->
+          <div id="voiceMasterCard" class="card voice-master-card hidden">
+            <div class="card-header">
+              <div>
+                <h3>Bản âm thanh tiếng Việt đã đồng bộ (Sẵn sàng cho Xuất video)</h3>
+                <p id="voiceMasterInfo" class="card-desc">—</p>
+              </div>
+              <button id="voiceDownloadBtn" class="btn btn-primary">Tải file âm thanh (.WAV)</button>
+            </div>
+            <audio id="voiceMasterPlayer" class="voice-master-player" controls></audio>
+          </div>
+
+          <div class="card sub-editor-card">
+            <div class="card-header">
+              <div class="sub-head-left">
+                <h3>Nghe thử từng câu thoại</h3>
+                <span id="voiceCountBadge" class="stage-tag">0 câu thoại</span>
+              </div>
+            </div>
+            <div id="voiceListContainer" class="srt-list"></div>
           </div>
         </section>
 
+        <!-- CÁC TAB CHỜ GĐ 6 -> 7 -->
         <section id="tab-mask" class="tab-panel">
           <div class="card stage-placeholder">
             <span class="stage-pill">Giai đoạn 6 • modules/ocr.js</span>
@@ -480,7 +582,7 @@
               <div class="form-group">
                 <label for="settingTranslateProvider">Nguồn dịch miễn phí mặc định</label>
                 <select id="settingTranslateProvider">
-                  <option value="google_gtx" selected>Google Dịch miễn phí (Khuyên dùng)</option>
+                  <option value="google_gtx" selected>Google Dịch theo cụm ngữ cảnh</option>
                   <option value="mymemory">MyMemory API (Miễn phí)</option>
                   <option value="apps_script">Google Apps Script Proxy tự cấu hình</option>
                 </select>
@@ -506,6 +608,6 @@
     </div>
   </div>
 
-  <script type="module" src="script.js"></script>
+  <script type="module" src="./script.js?v=5"></script>
 </body>
 </html>
