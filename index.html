@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KAI TỒ REVIEW AI – Video Translator Studio</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="./style.css?v=4" />
 </head>
 <body>
   <div class="app-shell">
@@ -31,7 +31,6 @@
         <button class="nav-item" data-tab="translate">
           <span class="nav-index">03</span>
           <span class="nav-label">Dịch phụ đề</span>
-          <span class="badge badge-next">GĐ 4</span>
         </button>
         <button class="nav-item" data-tab="voice">
           <span class="nav-index">04</span>
@@ -165,7 +164,7 @@
             <div class="card">
               <div class="card-header">
                 <h3>2. Quy trình xử lý tự động</h3>
-                <span class="stage-tag">Đã kích hoạt: Bước 1–3/11</span>
+                <span class="stage-tag">Đã kích hoạt: Bước 1–5/11</span>
               </div>
 
               <div class="progress-block">
@@ -183,7 +182,7 @@
                   Bắt đầu xử lý tự động (Mở khóa ở GĐ 7)
                 </button>
                 <p class="helper-text">
-                  Đã kích hoạt <strong>Giai đoạn 1–3</strong> (Đọc video + Whisper AI nhận diện phụ đề tiếng Trung ra file SRT).
+                  Đã kích hoạt <strong>Giai đoạn 1–4</strong> (Đọc video + Whisper AI nhận diện SRT + Dịch Trung → Việt & chỉnh sửa song ngữ).
                 </p>
               </div>
 
@@ -212,15 +211,21 @@
                   </div>
                   <span class="step-state" id="step3State">Chờ</span>
                 </li>
-                <li data-step="4" class="step-item locked">
+                <li data-step="4" class="step-item">
                   <span class="step-dot">4</span>
-                  <div class="step-body"><strong>Dịch toàn bộ phụ đề Trung → Việt</strong><small>Tích hợp ở Giai đoạn 4</small></div>
-                  <span class="step-state">GĐ 4</span>
+                  <div class="step-body">
+                    <strong>Dịch toàn bộ phụ đề Trung → Việt</strong>
+                    <small id="step4Desc">Chuyển sang mục 03 để dịch miễn phí</small>
+                  </div>
+                  <span class="step-state" id="step4State">Sẵn sàng</span>
                 </li>
-                <li data-step="5" class="step-item locked">
+                <li data-step="5" class="step-item">
                   <span class="step-dot">5</span>
-                  <div class="step-body"><strong>Kiểm tra & chỉnh sửa bản dịch</strong><small>Tích hợp ở Giai đoạn 4</small></div>
-                  <span class="step-state">GĐ 4</span>
+                  <div class="step-body">
+                    <strong>Kiểm tra & chỉnh sửa bản dịch</strong>
+                    <small id="step5Desc">Chưa có bản dịch tiếng Việt</small>
+                  </div>
+                  <span class="step-state" id="step5State">Chờ</span>
                 </li>
                 <li data-step="6" class="step-item locked">
                   <span class="step-dot">6</span>
@@ -257,7 +262,7 @@
           </div>
         </section>
 
-        <!-- TAB 2: TRÍCH XUẤT PHỤ ĐỀ (HOẠT ĐỘNG THẬT - GĐ 3) -->
+        <!-- TAB 2: TRÍCH XUẤT PHỤ ĐỀ (GĐ 3) -->
         <section id="tab-subtitle" class="tab-panel">
           <div class="card">
             <div class="card-header">
@@ -317,22 +322,74 @@
               </div>
               <div class="sub-head-actions">
                 <button id="subAddLineBtn" class="btn btn-secondary">+ Thêm dòng</button>
-                <button id="subDownloadSrtBtn" class="btn btn-primary" disabled>Tải file .SRT</button>
+                <button id="subDownloadSrtBtn" class="btn btn-secondary" disabled>Tải .SRT Trung</button>
+                <button id="goTranslateBtn" class="btn btn-primary">Sang bước Dịch phụ đề →</button>
               </div>
             </div>
             <div id="subListContainer" class="srt-list"></div>
           </div>
         </section>
 
-        <!-- CÁC TAB CHỜ GĐ 4 -> 7 -->
+        <!-- TAB 3: DỊCH PHỤ ĐỀ (HOẠT ĐỘNG THẬT - GĐ 4) -->
         <section id="tab-translate" class="tab-panel">
-          <div class="card stage-placeholder">
-            <span class="stage-pill">Giai đoạn 4 • modules/translate.js</span>
-            <h3>Dịch phụ đề Trung → Việt & Trình chỉnh sửa SRT</h3>
-            <p>Hỗ trợ dịch toàn bộ từng dòng không cắt xén, cho phép sửa trực tiếp nội dung và mốc thời gian từng câu thoại trước khi tạo giọng đọc.</p>
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3>Dịch toàn bộ phụ đề Trung → Việt (Miễn phí)</h3>
+                <p class="card-desc">Giữ nguyên số dòng và mốc thời gian, không tự ý cắt xén nội dung lời thoại.</p>
+              </div>
+              <span id="trSourceStatus" class="status-chip">Chưa có phụ đề tiếng Trung</span>
+            </div>
+
+            <div class="settings-grid sub-controls-grid">
+              <div class="form-group full-width">
+                <label for="trProviderSelect">Nguồn dịch miễn phí</label>
+                <select id="trProviderSelect">
+                  <option value="google_gtx" selected>Google Dịch miễn phí (Nhanh, tự dự phòng MyMemory — Khuyên dùng)</option>
+                  <option value="mymemory">MyMemory API (Miễn phí, không cần khóa)</option>
+                  <option value="apps_script">Google Apps Script Proxy (Dùng URL đã nhập ở mục 09 Cài đặt)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="workspace-actions">
+              <button id="trStartBtn" class="btn btn-primary" disabled>Dịch toàn bộ sang tiếng Việt</button>
+              <button id="trMissingBtn" class="btn btn-secondary" disabled>Chỉ dịch dòng còn trống</button>
+              <button id="trStopBtn" class="btn btn-danger-outline" disabled>Dừng dịch</button>
+              <button id="trImportSrtBtn" class="btn btn-secondary">Nhập file SRT tiếng Trung</button>
+              <button id="trRestoreDraftBtn" class="btn btn-secondary hidden">Khôi phục bản lưu gần nhất</button>
+              <input type="file" id="trSrtInput" accept=".srt,text/plain" hidden />
+            </div>
+
+            <div id="trErrorBox" class="alert alert-error hidden"></div>
+
+            <div id="trProgressBox" class="progress-block sub-progress-box hidden">
+              <div class="progress-top">
+                <span id="trProgressText">Đang chuẩn bị...</span>
+                <strong id="trProgressPercent">0%</strong>
+              </div>
+              <div class="progress-track">
+                <div id="trProgressBar" class="progress-fill" style="width: 0%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card sub-editor-card">
+            <div class="card-header">
+              <div class="sub-head-left">
+                <h3>Trình kiểm tra & chỉnh sửa song ngữ Trung – Việt</h3>
+                <span id="trCountBadge" class="stage-tag">0/0 dòng đã dịch</span>
+              </div>
+              <div class="sub-head-actions">
+                <button id="trDownloadBilingualBtn" class="btn btn-secondary" disabled>Tải SRT song ngữ</button>
+                <button id="trDownloadViBtn" class="btn btn-primary" disabled>Tải .SRT tiếng Việt</button>
+              </div>
+            </div>
+            <div id="trListContainer" class="srt-list"></div>
           </div>
         </section>
 
+        <!-- CÁC TAB CHỜ GĐ 5 -> 7 -->
         <section id="tab-voice" class="tab-panel">
           <div class="card stage-placeholder">
             <span class="stage-pill">Giai đoạn 5 • modules/voice.js</span>
@@ -371,9 +428,12 @@
             <div class="card-header">
               <div>
                 <h3>Lịch sử dự án (Lưu cục bộ trên trình duyệt)</h3>
-                <p class="card-desc">Ghi nhận các video đã phân tích gần đây. Dữ liệu chỉ lưu trong máy của bạn.</p>
+                <p class="card-desc">Ghi nhận các video đã phân tích và bản nháp SRT gần nhất trên máy của bạn.</p>
               </div>
-              <button id="clearHistoryBtn" class="btn btn-danger-outline">Xóa lịch sử</button>
+              <div class="sub-head-actions">
+                <button id="historyRestoreDraftBtn" class="btn btn-primary hidden">Tiếp tục bản nháp SRT gần nhất</button>
+                <button id="clearHistoryBtn" class="btn btn-danger-outline">Xóa lịch sử</button>
+              </div>
             </div>
             <div id="historyList" class="history-list"></div>
           </div>
@@ -418,11 +478,11 @@
               </div>
 
               <div class="form-group">
-                <label for="settingTranslateProvider">Nguồn dịch miễn phí (Dùng ở GĐ 4)</label>
+                <label for="settingTranslateProvider">Nguồn dịch miễn phí mặc định</label>
                 <select id="settingTranslateProvider">
-                  <option value="mymemory">MyMemory API (Miễn phí, không cần khóa)</option>
-                  <option value="apps_script">Google Apps Script Proxy tự cấu hình (Khuyên dùng)</option>
-                  <option value="offline_nllb">Offline AI NLLB-200 (Chạy trong trình duyệt)</option>
+                  <option value="google_gtx" selected>Google Dịch miễn phí (Khuyên dùng)</option>
+                  <option value="mymemory">MyMemory API (Miễn phí)</option>
+                  <option value="apps_script">Google Apps Script Proxy tự cấu hình</option>
                 </select>
               </div>
 
