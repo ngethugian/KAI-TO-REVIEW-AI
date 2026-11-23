@@ -1,8 +1,8 @@
 /**
- * Module Trích xuất phụ đề tiếng Trung bằng Whisper AI (Giai đoạn 3)
- * - Giải mã âm thanh 16kHz mono trực tiếp từ video hoặc file âm thanh rời
- * - Điều phối Web Worker chạy Transformers.js Whisper (WebGPU / WASM)
- * - Chỉnh sửa, nhập và xuất file SRT chuẩn mốc thời gian
+ * Module Trích xuất phụ đề tiếng Trung nâng cao (Giai đoạn 3 - Bản nâng cấp VAD & Large-v3-Turbo)
+ * - Hỗ trợ Whisper Large-v3-Turbo (siêu chuẩn tiếng Trung với WebGPU)
+ * - Lọc tạp âm nền, cắt theo khoảng lặng thông minh (VAD), chống ảo giác và tự tách câu dài
+ * - Bấm trực tiếp vào nút ▶ ở từng dòng để tua video đến đúng giây đó kiểm tra
  */
 
 export function secondsToSrtTime(totalSeconds) {
@@ -105,7 +105,7 @@ async function decodeTo16kMono(file) {
     return mono;
   } catch {
     throw new Error(
-      'Trình duyệt không thể giải mã luồng âm thanh từ tệp này (có thể video không có tiếng, bị lỗi codec, hoặc quá dung lượng RAM). ' +
+      'Trình duyệt không thể giải mã luồng âm thanh từ tệp này (có thể video không có tiếng, lỗi codec, hoặc quá dung lượng RAM). ' +
       'Hãy thử nạp file MP3/WAV rời hoặc video MP4 ngắn hơn.'
     );
   } finally {
@@ -124,9 +124,49 @@ export class SubtitleManager {
     this.externalAudioFile = null;
     this.subtitles = [];
 
+    this.enhanceSubtitleControlsUI();
     this.bindEvents();
     this.syncModelFromSettings();
     this.renderSubtitles();
+  }
+
+  enhanceSubtitleControlsUI() {
+    // Nâng cấp danh sách mô hình Whisper (thêm Large-v3-Turbo cho độ chính xác tiếng Trung cao nhất)
+    this.el.modelSelect.innerHTML = `
+      <option value="onnx-community/whisper-large-v3-turbo" selected>Whisper Large-v3-Turbo (~800MB — Chuẩn tiếng Trung nhất, khuyên dùng với WebGPU)</option>
+      <option value="onnx-community/whisper-small">Whisper Small (~480MB — Cân bằng, ổn định)</option>
+      <option value="onnx-community/whisper-base">Whisper Base (~150MB — Nhanh)</option>
+      <option value="onnx-community/whisper-tiny">Whisper Tiny (~75MB — Rất nhanh để test)</option>
+    `;
+
+    const grid = this.el.modelSelect.closest('.settings-grid');
+    if (!grid || grid.querySelector('#subVadModeSelect')) return;
+
+    const vadGroup = document.createElement('div');
+    vadGroup.className = 'form-group';
+    vadGroup.innerHTML = `
+      <label for="subVadModeSelect">Chế độ cắt đoạn & Lọc nhạc nền</label>
+      <select id="subVadModeSelect">
+        <option value="smart" selected>Cắt thông minh theo khoảng lặng VAD + Lọc BGM (Khuyên dùng)</option>
+        <option value="fixed">Cắt đều mỗi 28 giây (Dùng khi nhạc nền quá to át tiếng nói)</option>
+      </select>
+    `;
+
+    const splitGroup = document.createElement('div');
+    splitGroup.className = 'form-group';
+    splitGroup.innerHTML = `
+      <label for="subSplitModeSelect">Xử lý câu dài & Chống lặp ảo giác</label>
+      <select id="subSplitModeSelect">
+        <option value="on" selected>Bật lọc ảo giác + Tự tách câu dài gọn đẹp (Khuyên dùng)</option>
+        <option value="off">Giữ nguyên đầu ra thô của Whisper</option>
+      </select>
+    `;
+
+    grid.appendChild(vadGroup);
+    grid.appendChild(splitGroup);
+
+    this.el.vadModeSelect = vadGroup.querySelector('#subVadModeSelect');
+    this.el.splitModeSelect = splitGroup.querySelector('#subSplitModeSelect');
   }
 
   bindEvents() {
@@ -165,7 +205,11 @@ export class SubtitleManager {
   }
 
   syncModelFromSettings() {
-    if (this.appState.settings?.whisperModel) {
+    // Ưu tiên Large-v3-Turbo nếu WebGPU sẵn sàng, trừ khi người dùng chọn khác
+    const hasGpu = 'gpu' in navigator;
+    if (hasGpu && this.el.modelSelect.querySelector('option[value="onnx-community/whisper-large-v3-turbo"]')) {
+      this.el.modelSelect.value = 'onnx-community/whisper-large-v3-turbo';
+    } else if (this.appState.settings?.whisperModel) {
       this.el.modelSelect.value = this.appState.settings.whisperModel;
     }
   }
@@ -220,6 +264,8 @@ export class SubtitleManager {
     this.el.stopBtn.disabled = !running;
     this.el.modelSelect.disabled = running;
     this.el.deviceSelect.disabled = running;
+    if (this.el.vadModeSelect) this.el.vadModeSelect.disabled = running;
+    if (this.el.splitModeSelect) this.el.splitModeSelect.disabled = running;
   }
 
   async startExtraction() {
@@ -242,7 +288,7 @@ export class SubtitleManager {
       if (!this.isRunning) return;
 
       const durationSec = monoAudio.length / 16000;
-      this.setProgress(10, `Đã tách âm thanh (${Math.round(durationSec)} giây). Đang khởi tạo Whisper AI...`);
+      this.setProgress(10, `Đã tách âm thanh (${Math.round(durationSec)} giây). Đang khởi chạy Whisper AI...`);
 
       const preferredDevice =
         this.el.deviceSelect.value === 'auto'
@@ -250,8 +296,10 @@ export class SubtitleManager {
           : this.el.deviceSelect.value;
 
       const modelId = this.el.modelSelect.value;
+      const useSmartVad = this.el.vadModeSelect?.value !== 'fixed';
+      const smartClean = this.el.splitModeSelect?.value !== 'off';
 
-      this.worker = new Worker(new URL('./whisper.worker.js', import.meta.url), {
+      this.worker = new Worker(new URL('./whisper.worker.js?v=2', import.meta.url), {
         type: 'module'
       });
 
@@ -268,7 +316,10 @@ export class SubtitleManager {
           audio: monoAudio,
           modelId,
           device: preferredDevice,
-          language: 'chinese'
+          language: 'chinese',
+          useSmartVad,
+          splitLongLines: smartClean,
+          filterHallucinations: smartClean
         },
         [monoAudio.buffer]
       );
@@ -290,7 +341,7 @@ export class SubtitleManager {
       case 'model-progress': {
         const p = msg.progress;
         if (p?.status === 'progress' && typeof p.progress === 'number') {
-          const pct = 10 + p.progress * 0.2; // 10% -> 30% cho bước tải model
+          const pct = 10 + p.progress * 0.2;
           this.setProgress(pct, `Đang tải mô hình AI (${p.file || ''}): ${Math.round(p.progress)}%`);
         }
         break;
@@ -323,7 +374,7 @@ export class SubtitleManager {
         const pct = 30 + (msg.chunkIndex / msg.totalChunks) * 68;
         this.setProgress(
           pct,
-          `Đã xong đoạn ${msg.chunkIndex}/${msg.totalChunks} — Tìm thấy ${this.subtitles.length} câu thoại`
+          `Đã xong đoạn ${msg.chunkIndex}/${msg.totalChunks} — Trích xuất được ${this.subtitles.length} câu thoại`
         );
         break;
       }
@@ -331,7 +382,7 @@ export class SubtitleManager {
       case 'complete':
         this.setProgress(
           100,
-          `Hoàn tất (${(msg.device || '').toUpperCase()})! Trích xuất được ${this.subtitles.length} dòng phụ đề tiếng Trung.`
+          `Hoàn tất (${(msg.device || '').toUpperCase()})! Trích xuất chuẩn ${this.subtitles.length} dòng phụ đề tiếng Trung.`
         );
         this.cleanupWorker();
         this.setRunningUI(false);
@@ -422,7 +473,10 @@ export class SubtitleManager {
             <span>→</span>
             <input type="text" class="srt-time-input" data-field="end" value="${secondsToSrtTime(item.end)}" aria-label="Thời gian kết thúc" />
           </div>
-          <button type="button" class="btn-mini-danger" title="Xóa dòng">Xóa</button>
+          <div class="row-mini-actions">
+            <button type="button" class="btn-mini-secondary" data-seek-btn title="Nghe đoạn này từ video gốc">▶ Nghe gốc</button>
+            <button type="button" class="btn-mini-danger" title="Xóa dòng">Xóa</button>
+          </div>
         </div>
         <textarea class="srt-textarea" rows="2" placeholder="Nhập lời thoại tiếng Trung..."></textarea>
       `;
@@ -432,6 +486,21 @@ export class SubtitleManager {
       textarea.addEventListener('input', (e) => {
         item.text = e.target.value;
         this.notifySubtitlesChanged();
+      });
+
+      row.querySelector('[data-seek-btn]').addEventListener('click', () => {
+        const player = document.getElementById('mainVideoPlayer');
+        if (!player || !player.src) return;
+        player.currentTime = item.start;
+        player.play().catch(() => {});
+        const stopAt = item.end;
+        const onTime = () => {
+          if (player.currentTime >= stopAt) {
+            player.pause();
+            player.removeEventListener('timeupdate', onTime);
+          }
+        };
+        player.addEventListener('timeupdate', onTime);
       });
 
       row.querySelectorAll('.srt-time-input').forEach((input) => {
